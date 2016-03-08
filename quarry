@@ -1,0 +1,329 @@
+--Positions
+currentX = 0
+currentY = 0
+currentZ = 0
+currentShaft = {}
+
+-- blocks to mine down
+depth = 45
+
+-- dump trash every depth
+dumpTrashEvery = 20
+
+trash = {
+	"minecraft:cobblestone",
+	"minecraft:gravel",
+	"minecraft:dirt"
+}
+
+-- facings
+xPos = {}
+yPos = {}
+xNeg = {}
+yNeg = {}
+
+xPos["right"] = "yNeg"
+xPos["left"] = "yPos"
+xPos["c"] = "xPos"
+xPos.forward = function() currentX = currentX + 1 end
+yPos["right"] = "xPos"
+yPos["left"] = "xNeg"
+yPos["c"] = "yPos"
+yPos.forward = function() currentY = currentY + 1 end
+xNeg["right"] = "yPos"
+xNeg["left"] = "yNeg"
+xNeg["c"] = "xNeg"
+xNeg.forward = function() currentX = currentX - 1 end
+yNeg["right"] = "xNeg"
+yNeg["left"] = "xPos"
+yNeg["c"] = "yNeg"
+yNeg.forward = function() currentY = currentY - 1 end
+
+facing = {}
+facing["xPos"] = xPos
+facing["yPos"] = yPos
+facing["xNeg"] = xNeg
+facing["yNeg"] = yNeg
+
+file = io.open("position.txt", "r")
+io.input(file)
+
+-- Get current positions
+currentX = tonumber(io.read())
+currentY = tonumber(io.read())
+currentZ = tonumber(io.read())
+currentFacing = facing[io.read()]
+currentShaft.x = tonumber(io.read())
+currentShaft.y = tonumber(io.read())
+currentShaft.direction = io.read()
+io.close(file)
+
+function s()
+	fileSave = io.open("position.txt", "w")
+	io.output(fileSave)
+	io.write(currentX)
+	io.write("\n")
+	io.write(currentY)
+	io.write("\n")
+	io.write(currentZ)
+	io.write("\n")
+	io.write(currentFacing["c"])
+	io.write("\n")
+	io.write(currentShaft.x)
+	io.write("\n")
+	io.write(currentShaft.y)
+	io.write("\n")
+	io.write(currentShaft.direction)
+	io.close(fileSave)
+end
+
+function up()
+	while(turtle.digUp()) do
+	 sleep(0.6)
+	end
+	turtle.up()
+	currentZ = currentZ + 1
+	s()
+end
+
+function down()
+	turtle.digDown()
+	turtle.down()
+	currentZ = currentZ - 1
+	s()
+end
+
+function right()
+	turtle.turnRight()
+	currentFacing = facing[currentFacing["right"]]
+	s()
+end
+
+function left()
+	turtle.turnLeft()
+	currentFacing = facing[currentFacing["left"]]
+	s()
+end
+
+function forward()
+	while(turtle.dig()) do
+	 sleep(0.6)
+	end
+	turtle.forward()
+	currentFacing.forward()
+	s()
+end
+
+function forwardNoDig()
+	turtle.forward()
+	currentFacing.forward()
+	s()
+end
+
+function setFacing(toFacing)
+	while(currentFacing["c"] ~= toFacing["c"]) do
+		right()
+	end
+end
+
+function checkAtHome()
+	if(currentX == 0 and currentY == 0 and currentZ == 50 and currentFacing == facing["yPos"]) then return true end
+	return false
+end
+
+function returnHome()
+	if checkAtHome() then return end
+	homeXFacing = facing["xNeg"]
+	homeYFacing = facing["yNeg"]
+	-- probably need to go back from positive (x,y), but should check
+	if(currentX < 0) then homeXFacing = facing["xPos"] end
+	if(currentY < 0) then homeYFacing = facing["yPos"] end
+	-- return to home z
+	while(currentZ < 50) do up() end
+	while(currentZ > 50) do down() end
+	-- return to home x
+	setFacing(homeXFacing)
+	prevXDistance = math.abs(currentX)
+	while(currentX ~= 0) do 
+		forward() 
+		-- just in case
+		if(math.abs(currentX) > prevXDistance) then error("going the wrong way")end
+		prevXDistance = math.abs(currentX)
+	end
+	-- return to home y
+	setFacing(homeYFacing)
+	prevYDistance = math.abs(currentY)
+	while(currentY ~= 0) do 
+		forward() 
+		-- just in case
+		if(math.abs(currentY) > prevYDistance) then error("going the wrong way")end
+		prevYDistance = math.abs(currentY)
+	end
+	setFacing(facing["yPos"])
+end
+
+-- quarry functions
+function dig4()
+	for d4=1,4 do
+		while(turtle.dig()) do
+			sleep(0.6)
+		end
+		right()
+	end
+end
+
+function digColumnDown(d)
+	for dcd=1,d do
+		if dcd % dumpTrashEvery == 0 then dumpTrash() end
+		dig4()
+		down()
+	end
+end
+
+function digColumnUp(d)
+	for dcu=1,d do
+		if dcu % dumpTrashEvery == 0 then dumpTrash() end
+		dig4()
+		up()
+	end
+end
+
+function goToChest()
+	returnHome()
+	-- chest is at (0,-2)
+	setFacing(facing["yNeg"])
+	-- there shouldn't be anything in the way
+	forwardNoDig()
+end
+
+function empty()
+	for slot= 1,16 do
+		turtle.select(slot)
+		if(turtle.getItemCount() > 0) then
+			if(not turtle.drop()) then error("no space") end
+		end
+	end
+	turtle.select(1)
+end
+
+function dropOffLoot()
+	returnHome()
+	goToChest()
+	empty()
+	returnHome()
+end
+
+function isTrash(itemName)
+	for key,value in pairs(trash) do
+		if itemName == value then return true end 
+	end
+	return false
+end
+
+function dumpTrash()
+	local trashedItems = {}
+	for slot=1,16 do
+		turtle.select(slot)
+		local itemCount = turtle.getItemCount()
+		if(itemCount > 0) then
+			local itemName = turtle.getItemDetail().name
+			if(isTrash(itemName))then 
+				turtle.dropDown()
+				if trashedItems[itemName] == nil then
+					trashedItems[itemName] = itemCount
+				else
+					trashedItems[itemName] = trashedItems[itemName] + itemCount
+				end
+			end
+		end
+	end
+	for key,value in pairs(trashedItems) do print("dumped ",value," ",key) end
+	turtle.select(1)
+end
+
+function goToXY(x, y)
+	x = math.floor(x)
+	y = math.floor(y)
+	-- go to x
+	if(currentX < x) then
+		setFacing(facing["xPos"])
+	elseif(currentX > x) then
+		setFacing(facing["xNeg"])
+	end
+	while(currentX ~= x) do forward() end
+	-- go to y
+	if(currentY < y) then
+		setFacing(facing["yPos"])
+	elseif(currentY > y) then
+		setFacing(facing["yNeg"])
+	end
+	while(currentY ~= y) do forward() end
+	setFacing(facing["yPos"])
+end
+
+function calcNextShaft()
+	local nextShaft = {}
+	-- if current shaft was downwards
+	if(currentShaft.direction == "down") then
+		nextShaft.x = currentShaft.x + 1
+		nextShaft.y = currentShaft.y + 2
+		nextShaft.direction = "up"
+	elseif(currentShaft.direction == "up") then
+		nextShaft.x = currentShaft.x - 2
+		nextShaft.y = currentShaft.y + 1
+		nextShaft.direction = "down"
+	else error("I don't know whether I was going up or down")
+	end
+	return nextShaft
+end
+
+-- control
+function isStopLeverPulled()
+	-- stop level is postioned over home
+	if not checkAtHome() then print("WARNING: not in correct position to check stop lever") end
+	if rs.getInput("top") then
+		print("Stop lever is pulled") 
+		return true
+	end
+	return false
+end
+
+-- Main quarry method
+function continueQuarry()
+	returnHome()
+	if isStopLeverPulled() then	return end
+	-- if the in progress shaft was direction up, write it off and start at the next
+	if (currentShaft.direction == "up") then currentShaft = calcNextShaft() end
+	estimatedFuelRequired = (depth * 2) * 2 -- overshoot
+	while(turtle.getFuelLevel() > estimatedFuelRequired) do
+		if isStopLeverPulled() then	return end
+		-- go to shaft location
+		goToXY(currentShaft.x, currentShaft.y)
+		print("mining shaft " .. currentShaft.direction .. " at:")
+		print("x: " .. tostring(currentShaft.x))
+		print("y: " .. tostring(currentShaft.y))
+		if(currentShaft.direction == "down") then
+			digColumnDown(depth)
+		end
+		if(currentShaft.direction == "up") then
+			digColumnUp(depth)
+			dropOffLoot()
+		end
+		currentShaft = calcNextShaft()
+		if isStopLeverPulled() then	return end
+	end
+	print("need more fuel!")
+	returnHome()
+end
+
+-- Main program
+input = {...}
+if(input[1] == "home")then
+	print("returning home")
+	returnHome()
+	dropOffLoot()
+elseif (input[1] == "test") then
+	dumpTrash()
+else
+	continueQuarry()
+end

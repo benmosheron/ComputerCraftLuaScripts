@@ -1,0 +1,34 @@
+function digForward()
+	turtle.dig()
+	turtle.forward()
+end
+
+function dig2Rows(rowSize)
+	digForward()
+	turtle.turnRight()
+	for j = 1,rowSize do
+		digForward()
+	end
+	turtle.turnLeft()
+	digForward()
+	turtle.turnLeft()
+	for j = 1,rowSize do
+		digForward()
+	end
+	turtle.turnRight()
+end
+
+inputs = {...}
+xMax = tonumber(inputs[1])
+yMax = tonumber(inputs[2])
+xReal = math.ceil(xMax/2)
+
+--start
+turtle.dig()
+
+
+for i = 1,xReal do
+	dig2Rows(yMax - 1)
+end
+
+

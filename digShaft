@@ -1,0 +1,25 @@
+function digWhile()
+	while(turtle.dig()) do
+		sleep(0.6)
+	end
+end
+
+function forward()
+	digWhile()
+	turtle.forward()
+end
+
+function down()
+	turtle.digDown()
+	turtle.down()
+end
+
+input = {...}
+depth = tonumber(input[1])
+
+for i = 1,depth do
+	forward()
+	digWhile()
+	down()
+	turtle.digDown()
+end
